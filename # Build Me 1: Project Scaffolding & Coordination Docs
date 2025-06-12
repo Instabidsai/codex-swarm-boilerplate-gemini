@@ -1,0 +1,370 @@
+# Build Me 1: Project Scaffolding & Coordination Docs
+
+**To the Codex Agent:** Your task is to create the complete directory structure and all top-level coordination documents for the "Instabids Homeowner Agent Swarm" project.
+
+Execute the following steps precisely.
+
+---
+
+### **Step 1: Create the Full Directory Structure**
+
+Use file system commands to create the following directories and empty `__init__.py` files. This creates the skeleton of our Python project.
+
+```bash
+# Create root directory
+mkdir instabids-homeowner-swarm
+cd instabids-homeowner-swarm
+
+# Create main directories
+mkdir build_coordination
+mkdir core
+mkdir agents
+mkdir ui
+mkdir tests
+mkdir deployment
+
+# Create subdirectories for 'core'
+mkdir core/base
+mkdir core/events
+mkdir core/memory
+mkdir core/security
+mkdir core/mcp
+touch core/__init__.py
+touch core/base/__init__.py
+touch core/events/__init__.py
+touch core/memory/__init__.py
+touch core/security/__init__.py
+touch core/mcp/__init__.py
+
+
+# Create subdirectories for 'agents'
+mkdir agents/homeowner_intake
+mkdir agents/project_scope
+mkdir agents/communication_filter
+mkdir agents/payment_gate
+mkdir agents/ui_generator
+touch agents/__init__.py
+touch agents/homeowner_intake/__init__.py
+touch agents/project_scope/__init__.py
+touch agents/communication_filter/__init__.py
+touch agents/payment_gate/__init__.py
+touch agents/ui_generator/__init__.py
+
+
+# Create subdirectories for 'ui'
+mkdir ui/src
+mkdir ui/public
+mkdir ui/src/components
+mkdir ui/src/hooks
+mkdir ui/src/pages
+
+# Create subdirectories for 'tests'
+mkdir tests/agent_specific
+mkdir tests/e2e
+mkdir tests/integration
+mkdir tests/performance
+mkdir tests/security
+touch tests/__init__.py
+
+# Create subdirectories for 'deployment'
+mkdir deployment/postgres
+mkdir deployment/scripts
+
+Step 2: Create the README.md File
+Create a file named README.md in the root directory with the following content.
+
+# 🌊 INSTABIDS HOMEOWNER AGENT SWARM
+
+**Building the world's first living AI organism - starting with the Homeowner Agent Swarm as a proof of concept.**
+
+This repository contains the complete build plan and source structure for the Instabids Homeowner Agent Swarm. It's designed for a team of AI agents to collaboratively build, test, and deploy a complex, event-driven system.
+
+## 🤖 QUICK START FOR AI AGENTS
+
+### Your Agent Assignment:
+- **Agent 1-6:** Check `AGENT_ASSIGNMENTS.md` for your specific domain and build path.
+- **Build Order:** Agent 1 → Agents 2-4 (in parallel) → Agents 5-6 (in parallel).
+- **Tools:** Use MCP tools as specified in `MCP_TOOLS_REFERENCE.md`.
+
+### Critical Rules:
+- ❌ **NO** direct agent communication. Use Redis Streams only.
+- 🛡️ Contact information protection is **ABSOLUTE**. This is the core of the business model.
+- 💰 Cost limits are **$0.05/event** and **$1000/day**.
+- 📝 Update `build_coordination/build_status.json` after each of your build phases.
+
+---
+
+## 📁 PROJECT STRUCTURE
+<!-- AUTO-GENERATED - DO NOT EDIT MANUALLY -->
+<!-- Use: tree -I '__pycache__|.git|node_modules' -L 3 > temp && insert into README -->
+
+
+instabids-homeowner-swarm/
+├── README.md
+├── AGENT_ASSIGNMENTS.md
+├── MCP_TOOLS_REFERENCE.md
+├── ARCHITECTURE_GUIDE.md
+├── CODEBASE_MANIFEST.json
+├── build_coordination/
+│   ├── build_status.json
+│   ├── agent_dependencies.json
+│   └── agent_handoff_manifest.json
+├── core/
+│   ├── base/
+│   ├── events/
+│   ├── memory/
+│   └── security/
+├── agents/
+│   ├── homeowner_intake/
+│   ├── project_scope/
+│   ├── communication_filter/
+│   ├── payment_gate/
+│   └── ui_generator/
+├── ui/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   └── pages/
+│   └── public/
+├── tests/
+│   ├── agent_specific/
+│   ├── e2e/
+│   ├── integration/
+│   ├── performance/
+│   └── security/
+└── deployment/
+├── postgres/
+└── scripts/
+
+
+---
+
+## 🧪 TESTING STRATEGY
+
+- **Frameworks:** `pytest` and `asyncio` for Python, `Jest` for TypeScript.
+- **Location:** All tests are located in the `tests/` directory, with subdirectories for different types of testing.
+- **Run Tests:** `python -m pytest tests/`
+- **Required Coverage:** >80% for all agent domains.
+- **Security Tests:** The contact protection system must have a 100% block rate.
+
+---
+
+## 🚀 QUICK DEPLOYMENT
+
+### Prerequisites:
+- **Redis:** Already configured at DigitalOcean (see `MCP_TOOLS_REFERENCE.md`).
+- **Supabase:** Use the provided API token.
+- **MCP Tools:** Pre-configured (see `CODEBASE_MANIFEST.json`).
+
+### Start Building:
+1.  Check `build_coordination/build_status.json` for the current progress.
+2.  Follow your assignment in `AGENT_ASSIGNMENTS.md`.
+3.  Use MCP tools as documented in `MCP_TOOLS_REFERENCE.md`.
+4.  Test continuously with `python -m pytest tests/agent_specific/`.
+
+Step 3: Create the AGENT_ASSIGNMENTS.md File
+Create a file named AGENT_ASSIGNMENTS.md in the root directory with the following content.
+
+# 🤖 AGENT ASSIGNMENTS
+
+This document outlines the specific build paths for each of the 6 AI agents responsible for constructing the Instabids Homeowner Agent Swarm.
+
+---
+
+## AGENT 1: CORE INFRASTRUCTURE BUILDER
+
+**🎯 RESPONSIBILITY:** Build the foundational infrastructure that all other agents depend on.
+**📁 YOUR DOMAIN:** `core/`, `deployment/`
+
+---
+
+## AGENT 2: HOMEOWNER INTAKE BUILDER
+
+**🎯 RESPONSIBILITY:** Build the natural language processing for homeowner project intake.
+**📁 YOUR DOMAIN:** `agents/homeowner_intake/`, `tests/agent_specific/test_intake_agent.py`
+
+---
+
+## AGENT 3: PROJECT SCOPE BUILDER
+
+**🎯 RESPONSIBILITY:** Convert intake data into structured project scopes.
+**📁 YOUR DOMAIN:** `agents/project_scope/`, `tests/agent_specific/test_scope_agent.py`
+
+---
+
+## AGENT 4: COMMUNICATION FILTER BUILDER
+
+**🎯 RESPONSIBILITY:** Build the multi-layer contact protection system.
+**📁 YOUR DOMAIN:** `agents/communication_filter/`, `tests/agent_specific/test_filter_agent.py`
+
+---
+
+## AGENT 5: PAYMENT GATE BUILDER
+
+**🎯 RESPONSIBILITY:** Build the payment processing system that controls contact information release.
+**📁 YOUR DOMAIN:** `agents/payment_gate/`, `tests/agent_specific/test_payment_agent.py`
+
+---
+
+## AGENT 6: UI GENERATOR BUILDER
+
+**🎯 RESPONSIBILITY:** Build the dynamic, agent-aware UI using CopilotKit.
+**📁 YOUR DOMAIN:** `agents/ui_generator/`, `ui/`, `tests/agent_specific/test_ui_agent.py`
+
+Step 4: Create the ARCHITECTURE_GUIDE.md File
+Create a file named ARCHITECTURE_GUIDE.md in the root directory with the following content.
+
+# 🏗️ ARCHITECTURE GUIDE
+
+This document outlines the system design principles for the Instabids Homeowner Agent Swarm.
+
+## 3-Tier Memory System
+
+1.  **Tier 1: Redis** - Real-time events, agent coordination, and temporary state.
+2.  **Tier 2: Supabase** - Event store for an audit trail and read models for fast queries.
+3.  **Tier 3: Dynamic UI** - CopilotKit, morphing based on agent activity.
+
+## Event-Driven Core
+
+- **NO** direct agent communication. Agents **ONLY** communicate through Redis Stream events.
+- A complete audit trail of every action is stored indefinitely.
+- The system is self-organizing, with agents spawning based on queue depth.
+- The system is self-healing, with automatic recovery from failures.
+
+## Agentic Coordination Patterns
+
+- **Handoffs:** Agent handoffs are managed through a `handoffProtocol` defined in `CODEBASE_MANIFEST.json`.
+- **Status Tracking:** The build status is tracked in `build_coordination/build_status.json`.
+- **Dependencies:** Agent dependencies are explicitly defined in `build_coordination/agent_dependencies.json`.
+
+Step 5: Create the CODEBASE_MANIFEST.json File
+Create a file named CODEBASE_MANIFEST.json in the root directory with the following content. This file is critical for agent coordination.
+
+{
+  "project": "instabids-homeowner-swarm",
+  "version": "1.0.0",
+  "architecture": "event-driven-agent-swarm",
+  "entryPoints": {
+    "agent1_infrastructure": "core/events/publisher.py",
+    "agent2_intake": "agents/homeowner_intake/intake_agent.py",
+    "agent3_scope": "agents/project_scope/scope_agent.py",
+    "agent4_filter": "agents/communication_filter/filter_agent.py",
+    "agent5_payment": "agents/payment_gate/payment_agent.py",
+    "agent6_ui": "agents/ui_generator/ui_agent.py"
+  },
+  "testCommand": "python -m pytest tests/",
+  "buildCommand": "docker-compose up -d",
+  "mcpTools": {
+    "essential": ["filesystem", "redis", "supabase"],
+    "research": ["context7", "github"],
+    "deployment": ["digitalocean", "vercel", "docker"]
+  },
+  "dependencies": {
+    "core": ["redis", "supabase", "langchain"],
+    "ui": ["react", "copilotkit", "typescript"],
+    "testing": ["pytest", "jest", "asyncio"]
+  },
+  "architecture_patterns": {
+    "communication": "redis-streams-only",
+    "memory": "3-tier-redis-postgres-supabase",
+    "security": "multi-layer-contact-protection",
+    "cost_control": "circuit-breakers-enabled"
+  },
+  "criticalRules": [
+    "NO_DIRECT_AGENT_COMMUNICATION",
+    "CONTACT_PROTECTION_ABSOLUTE",
+    "COST_LIMITS_ENFORCED",
+    "EVENT_SOURCING_REQUIRED",
+    "MCP_TOOLS_ONLY"
+  ],
+  "agentCoordination": {
+    "buildOrder": ["agent1", ["agent2", "agent3", "agent4"], ["agent5", "agent6"]],
+    "statusTracking": "build_coordination/build_status.json",
+    "handoffProtocol": "event-completion-triggers-next-agent"
+  }
+}
+
+Step 6: Create the Build Coordination Files
+Create the following three files inside the build_coordination/ directory.
+
+build_coordination/build_status.json
+{
+  "project_info": {
+    "name": "instabids_homeowner_swarm_proof_of_concept",
+    "version": "1.0.0",
+    "started_at": null,
+    "estimated_completion": "14 hours",
+    "total_agents": 6
+  },
+  "agents": {
+    "agent_1": {
+      "name": "Core Infrastructure Builder",
+      "status": "not_started",
+      "completion_percentage": 0,
+      "last_update": null
+    },
+    "agent_2": {
+      "name": "Homeowner Intake Builder",
+      "status": "waiting_dependencies",
+      "completion_percentage": 0,
+      "last_update": null
+    },
+    "agent_3": {
+      "name": "Project Scope Builder",
+      "status": "waiting_dependencies",
+      "completion_percentage": 0,
+      "last_update": null
+    },
+    "agent_4": {
+      "name": "Communication Filter Builder",
+      "status": "waiting_dependencies",
+      "completion_percentage": 0,
+      "last_update": null
+    },
+    "agent_5": {
+      "name": "Payment Gate Builder",
+      "status": "waiting_dependencies",
+      "completion_percentage": 0,
+      "last_update": null
+    },
+    "agent_6": {
+      "name": "UI Generator Builder",
+      "status": "waiting_dependencies",
+      "completion_percentage": 0,
+      "last_update": null
+    }
+  }
+}
+
+build_coordination/agent_dependencies.json
+{
+  "agent_1": [],
+  "agent_2": ["agent_1"],
+  "agent_3": ["agent_1", "agent_2"],
+  "agent_4": ["agent_1"],
+  "agent_5": ["agent_1", "agent_4"],
+  "agent_6": ["agent_1", "agent_2", "agent_3", "agent_4", "agent_5"]
+}
+
+build_coordination/agent_handoff_manifest.json
+{
+  "agentHandoffs": {
+    "agent1_to_others": {
+      "completionTrigger": "redis_streams_operational + supabase_connected",
+      "deliverables": ["core/events/", "core/memory/", "core/security/"],
+      "nextAgents": ["agent2", "agent3", "agent4"]
+    },
+    "agent2_to_agent3": {
+      "completionTrigger": "intake_processing_functional",
+      "deliverables": ["agents/homeowner_intake/"],
+      "dataFlow": "homeowner:intake_complete → homeowner:scope_needed"
+    },
+    "agent4_completion": {
+      "completionTrigger": "contact_protection_100_percent",
+      "deliverables": ["agents/communication_filter/"],
+      "enablesAgents": ["agent5"]
+    }
+  }
+}
+
+Completion: Once you have created all the directories and files listed above, this build step
