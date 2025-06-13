@@ -1,0 +1,228 @@
+Build Me 4: Agent 3 - Project Scope
+To the Codex Agent: Your task is to build the Project Scope Agent. This agent consumes the structured data from the Intake Agent and enriches it into a detailed project scope, including timelines, budget breakdowns, and contractor matching criteria.
+
+Execute the following steps precisely.
+
+Step 1: Create the Budget and Timeline Parsers
+These modules handle the financial and time-based aspects of the project scope.
+
+File: agents/project_scope/budget_parser.py
+
+# agents/project_scope/budget_parser.py
+import re
+
+class BudgetParser:
+    """Parses and breaks down project budgets."""
+    COST_RATIOS = {
+        "materials": 0.40,
+        "labor": 0.50,
+        "permits": 0.05,
+        "contingency": 0.05
+    }
+
+    async def create_budget_breakdown(self, budget_range_str: str) -> dict:
+        """Creates a detailed budget breakdown from a string."""
+        min_val, max_val = self._parse_budget_range(budget_range_str)
+        avg_budget = (min_val + max_val) / 2
+        breakdown = {
+            category: {"amount": avg_budget * ratio, "percentage": ratio * 100}
+            for category, ratio in self.COST_RATIOS.items()
+        }
+        return {
+            "total_budget_range": {"min": min_val, "max": max_val},
+            "estimated_budget": avg_budget,
+            "breakdown": breakdown
+        }
+
+    def _parse_budget_range(self, budget_range_str: str) -> tuple:
+        """Parses a budget range string into min/max integers."""
+        if not budget_range_str:
+            return (5000, 15000) # Default range
+        numbers = re.findall(r'[\\d,]+', budget_range_str.replace('k', '000'))
+        if len(numbers) >= 2:
+            return (int(numbers[0].replace(',', '')), int(numbers[1].replace(',', '')))
+        elif len(numbers) == 1:
+            val = int(numbers[0].replace(',', ''))
+            return (int(val * 0.8), int(val * 1.2))
+        return (5000, 15000) # Fallback
+
+File: agents/project_scope/timeline_estimator.py
+
+# agents/project_scope/timeline_estimator.py
+
+class TimelineEstimator:
+    """Estimates project timelines based on project type and scope."""
+    BASE_DURATIONS_WEEKS = {
+        "bathroom_remodel": {"min": 2, "max": 4},
+        "kitchen_remodel": {"min": 4, "max": 8},
+        "flooring": {"min": 1, "max": 2},
+    }
+
+    async def estimate_timeline(self, project_type: str) -> dict:
+        """Estimates a project timeline with milestones."""
+        base_duration = self.BASE_DURATIONS_WEEKS.get(project_type, {"min": 2, "max": 4})
+        return {
+            "estimated_duration_weeks": base_duration,
+            "milestones": self._create_milestones(base_duration['max'])
+        }
+
+    def _create_milestones(self, total_weeks: int) -> list:
+        """Creates a generic list of project milestones."""
+        return [
+            {"name": "Planning & Permits", "duration_weeks": total_weeks * 0.1},
+            {"name": "Material Procurement", "duration_weeks": total_weeks * 0.2},
+            {"name": "Core Construction", "duration_weeks": total_weeks * 0.6},
+            {"name": "Finishing & Cleanup", "duration_weeks": total_weeks * 0.1},
+        ]
+
+Step 2: Create the Requirement and Data Structurers
+These modules analyze the project requirements and structure the final scope.
+
+File: agents/project_scope/requirement_analyzer.py
+
+# agents/project_scope/requirement_analyzer.py
+
+class RequirementAnalyzer:
+    """Analyzes project requirements for complexity and contractor needs."""
+    COMPLEXITY_FACTORS = {
+        "electrical": 3, "plumbing": 3, "structural": 5
+    }
+
+    async def analyze_complexity(self, requirements: list) -> int:
+        """Analyzes a list of requirements to produce a complexity score."""
+        score = 1
+        for req in requirements:
+            req_lower = req.lower()
+            for factor, value in self.COMPLEXITY_FACTORS.items():
+                if factor in req_lower:
+                    score += value
+        return score
+
+File: agents/project_scope/data_structurer.py
+
+# agents/project_scope/data_structurer.py
+import json
+
+class DataStructurer:
+    """Structures project data for downstream processing."""
+    async def create_project_scope(self, intake_data: dict, mcp) -> dict:
+        """
+        Uses an LLM to generate a detailed scope, including contractor criteria.
+        """
+        scope_creation_prompt = f"""
+        Create a detailed project scope and contractor matching criteria based on this data:
+        Intake Data: {intake_data}
+
+        Generate a structured JSON scope including:
+        1.  detailed_work_breakdown (list of tasks)
+        2.  required_materials (list of materials)
+        3.  required_permits (list of potential permits)
+        4.  contractor_criteria (object with "required_skills" list and "minimum_experience_years")
+
+        Return only the JSON object.
+        """
+        scope_json_str = await mcp.call_tool("context7", {
+            "query": scope_creation_prompt
+        })
+        
+        try:
+            # In a real system, parse and validate the JSON string
+            return json.loads(scope_json_str) if scope_json_str else {}
+        except (json.JSONDecodeError, TypeError):
+             # Fallback for simulation or if the LLM fails
+            return {"detailed_work_breakdown": ["simulated task"]}
+
+Step 3: Create the Main Scoping Agent
+This file orchestrates the scoping process.
+
+File: agents/project_scope/scope_agent.py
+
+# agents/project_scope/scope_agent.py
+import asyncio
+import json
+from core.base.base_agent import BaseAgent
+from core.events.publisher import EventPublisher
+from core.events.consumer import EventConsumer
+from agents.project_scope.data_structurer import DataStructurer
+from agents.project_scope.requirement_analyzer import RequirementAnalyzer
+from agents.project_scope.budget_parser import BudgetParser
+from agents.project_scope.timeline_estimator import TimelineEstimator
+
+class ProjectScopeAgent(BaseAgent):
+    """Converts intake data into a structured project scope."""
+    def __init__(self, agent_id: str = "project_scope_001"):
+        super().__init__(agent_id, "project_scope")
+        self.data_structurer = DataStructurer()
+        self.req_analyzer = RequirementAnalyzer()
+        self.budget_parser = BudgetParser()
+        self.timeline_estimator = TimelineEstimator()
+        self.event_publisher = EventPublisher()
+        self.event_consumer = EventConsumer(
+            consumer_group="scope_processors",
+            consumer_name=self.agent_id
+        )
+
+    async def start_processing(self, mcp):
+        """Main event processing loop for the scope agent."""
+        print(f"Agent {self.agent_id} starting...")
+        while self.is_running:
+            try:
+                events = await self.event_consumer.consume(
+                    streams=["homeowner:intake_complete"], mcp=mcp
+                )
+                if events:
+                    for stream, messages in events:
+                        for message_id, data in messages:
+                            decoded_data = {k.decode('utf-8'): v.decode('utf-8') for k, v in data.items()}
+                            payload = json.loads(decoded_data.get('data', '{}'))
+                            await self.process_scope_creation(payload, mcp)
+                            await mcp.call_tool("redis", {
+                                "command": "xack",
+                                "stream": stream.decode('utf-8'),
+                                "group": "scope_processors",
+                                "id": message_id.decode('utf-8')
+                            })
+                await asyncio.sleep(1)
+            except Exception as e:
+                await self.handle_error(e, mcp)
+                await asyncio.sleep(5)
+
+    async def process_scope_creation(self, event_payload: dict, mcp):
+        """Creates a structured scope from the intake data."""
+        project_id = event_payload.get("project_id")
+        intake_data = event_payload.get("data", {})
+
+        # 1. Generate core scope and complexity score
+        project_scope = await self.data_structurer.create_project_scope(intake_data, mcp)
+        complexity_score = await self.req_analyzer.analyze_complexity(intake_data.get("requirements", []))
+
+        # 2. Estimate timeline and budget
+        timeline_estimate = await self.timeline_estimator.estimate_timeline(intake_data.get("project_type"))
+        budget_breakdown = await self.budget_parser.create_budget_breakdown(intake_data.get("budget_range"))
+
+        # 3. Assemble final scope data
+        final_scope_data = {
+            "project_id": project_id,
+            "project_scope": project_scope,
+            "complexity_score": complexity_score,
+            "timeline_estimate": timeline_estimate,
+            "budget_breakdown": budget_breakdown
+        }
+
+        # 4. Store structured scope in Supabase
+        await mcp.call_tool("supabase", {
+            "action": "update",
+            "table": "projects",
+            "match": {"id": project_id},
+            "data": {"structured_scope": json.dumps(final_scope_data), "status": "scoping_complete"}
+        })
+
+        # 5. Publish completion event
+        await self.event_publisher.publish(
+            "homeowner:scope_complete",
+            "project_scope_complete",
+            final_scope_data,
+            mcp
+        )
+
+Completion: Once you have created all the files listed above in the agents/project_scope/ directory, this build step is complete.
