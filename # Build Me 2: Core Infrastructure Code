@@ -1,0 +1,31 @@
+# Build Me 2: Core Infrastructure Code
+
+**To the Codex Agent:** Implement the initial core infrastructure for the Instabids Homeowner Agent Swarm. The focus for this build is creating the event-driven foundation and memory layer that all other agents rely on.
+
+Follow these steps carefully.
+
+---
+
+### **Step 1: Events & Messaging**
+
+1. Add `core/events/publisher.py` containing a `publish_event` function that sends JSON events to a Redis stream.
+2. Add `core/events/subscriber.py` with an async generator `consume_events` that yields events from a Redis stream.
+
+### **Step 2: Memory Layer**
+
+1. Add `core/memory/redis_store.py` with a `RedisStore` class that wraps basic Redis commands (`set`, `get`, and `xadd`).
+2. Add `core/memory/postgres_store.py` with a `PostgresStore` class providing simple `save_event` and `fetch_events` methods using `asyncpg`.
+
+### **Step 3: Security Filter**
+
+1. Add `core/security/contact_filter.py` implementing `mask_contact_info(text: str) -> str` which replaces phone numbers and emails with `[REDACTED]`.
+
+### **Step 4: Base Agent Class**
+
+1. In `core/base/agent.py`, define an abstract `BaseAgent` class that initializes Redis connections and exposes `publish` and `consume` helpers.
+
+### **Step 5: Minimal Tests**
+
+1. Create `tests/test_contact_filter.py` with unit tests for `mask_contact_info` covering emails and phone numbers.
+
+Completion of this build should leave you with working infrastructure modules and passing tests. Update `build_coordination/build_status.json` when done.
