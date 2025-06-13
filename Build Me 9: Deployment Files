@@ -1,0 +1,130 @@
+Build Me 9: Deployment Files
+To the Codex Agent: This is the final step. Your task is to create the deployment configuration files. These files will define the services required to run the entire agent swarm locally using Docker.
+
+Execute the following steps precisely.
+
+Step 1: Create the Docker Compose File
+This file defines all the services (agents, Redis, etc.) and how they connect to each other.
+
+File: deployment/docker-compose.yml
+
+version: '3.8'
+
+services:
+  redis:
+    image: "redis/redis-stack:latest"
+    ports:
+      - "6379:6379"
+      - "8001:8001"
+    volumes:
+      - redis_data:/data
+
+  # In a real project, Supabase would be a cloud service.
+  # This is a placeholder for a local Postgres instance if needed.
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: instabids
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # A separate service would be defined for each agent.
+  # This is a template for one such agent service.
+  intake_agent:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.agent
+    command: python -m agents.main --agent-class HomeownerIntakeAgent
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - SUPABASE_URL=http://postgres:5432 # This would be the real Supabase URL
+      - SUPABASE_KEY=your_supabase_key
+    depends_on:
+      - redis
+      - postgres
+
+  # ... other agent services (scope_agent, filter_agent, etc.) would follow the same pattern
+
+  frontend:
+    build:
+      context: ../ui
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - intake_agent # Depends on at least one agent to be useful
+
+volumes:
+  redis_data:
+  postgres_data:
+
+Step 2: Create a Generic Dockerfile for Agents
+This Dockerfile can be used to build the container image for each Python-based agent.
+
+File: deployment/Dockerfile.agent
+
+# Use an official Python runtime as a parent image
+FROM python:3.9-slim
+
+# Set the working directory in the container
+WORKDIR /usr/src/app
+
+# Copy the requirements file into the container at /usr/src/app
+COPY requirements.txt ./
+
+# Install any needed packages specified in requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the entire project directory into the container
+COPY . .
+
+# The command to run the application will be specified in docker-compose.yml
+
+Step 3: Create a Dockerfile for the UI
+This Dockerfile is specifically for building the React frontend application.
+
+File: ui/Dockerfile
+
+# Stage 1: Build the React app
+FROM node:16-alpine as build
+
+WORKDIR /app
+
+# Copy package.json and package-lock.json
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy the rest of the app's source code
+COPY . .
+
+# Build the app
+RUN npm run build
+
+# Stage 2: Serve the app with Nginx
+FROM nginx:stable-alpine
+
+# Copy the built app from the build stage
+COPY --from=build /app/build /usr/share/nginx/html
+
+# Expose port 80
+EXPOSE 80
+
+# Start Nginx
+CMD ["nginx", "-g", "daemon off;"]
+
+Step 4: Create a requirements.txt File
+This file lists the Python dependencies for the agents.
+
+File: requirements.txt
+
+pydantic
+redis
+# Add other dependencies like langchain, etc., as needed
+
+Completion: You have now created all the necessary files for the project boilerplate. The entire repository structure is complete and ready for development.
