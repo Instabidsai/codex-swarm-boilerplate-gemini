@@ -1,0 +1,19 @@
+{
+  "agentHandoffs": {
+    "agent1_to_others": {
+      "completionTrigger": "redis_streams_operational + supabase_connected",
+      "deliverables": ["core/events/", "core/memory/", "core/security/"],
+      "nextAgents": ["agent2", "agent3", "agent4"]
+    },
+    "agent2_to_agent3": {
+      "completionTrigger": "intake_processing_functional",
+      "deliverables": ["agents/homeowner_intake/"],
+      "dataFlow": "homeowner:intake_complete → homeowner:scope_needed"
+    },
+    "agent4_completion": {
+      "completionTrigger": "contact_protection_100_percent",
+      "deliverables": ["agents/communication_filter/"],
+      "enablesAgents": ["agent5"]
+    }
+  }
+}

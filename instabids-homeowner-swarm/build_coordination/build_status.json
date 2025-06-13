@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "name": "instabids_homeowner_swarm_proof_of_concept",
+    "version": "1.0.0",
+    "started_at": null,
+    "estimated_completion": "14 hours",
+    "total_agents": 6
+  },
+  "agents": {
+    "agent_1": {
+      "name": "Core Infrastructure Builder",
+      "status": "not_started",
+      "completion_percentage": 0,
+      "last_update": null
+    },
+    "agent_2": {
+      "name": "Homeowner Intake Builder",
+      "status": "waiting_dependencies",
+      "completion_percentage": 0,
+      "last_update": null
+    },
+    "agent_3": {
+      "name": "Project Scope Builder",
+      "status": "waiting_dependencies",
+      "completion_percentage": 0,
+      "last_update": null
+    },
+    "agent_4": {
+      "name": "Communication Filter Builder",
+      "status": "waiting_dependencies",
+      "completion_percentage": 0,
+      "last_update": null
+    },
+    "agent_5": {
+      "name": "Payment Gate Builder",
+      "status": "waiting_dependencies",
+      "completion_percentage": 0,
+      "last_update": null
+    },
+    "agent_6": {
+      "name": "UI Generator Builder",
+      "status": "waiting_dependencies",
+      "completion_percentage": 0,
+      "last_update": null
+    }
+  }
+}
