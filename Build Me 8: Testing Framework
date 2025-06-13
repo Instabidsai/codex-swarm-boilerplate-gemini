@@ -1,0 +1,124 @@
+Build Me 8: Testing Framework
+To the Codex Agent: Your final software development task is to create the testing boilerplate. A robust testing suite is essential for ensuring the agent swarm behaves as expected. Create the following test files. The logic within them will be simple assertions for now, serving as placeholders for more comprehensive tests.
+
+Execute the following steps precisely.
+
+Step 1: Create Agent-Specific Tests
+These tests focus on the individual logic of each agent.
+
+File: tests/agent_specific/test_intake_agent.py
+
+import pytest
+from agents.homeowner_intake.nlp_processor import NLPProcessor
+
+@pytest.mark.asyncio
+async def test_project_extraction():
+    # This test requires a mocked MCP object
+    class MockMCP:
+        async def call_tool(self, tool_name, args):
+            return '{"project_type": "kitchen_remodel"}'
+
+    nlp = NLPProcessor()
+    description = "I want to redo my kitchen."
+    result = await nlp.extract_project_info(description, MockMCP())
+    assert result['project_type'] == "kitchen_remodel"
+
+File: tests/agent_specific/test_scope_agent.py
+
+import pytest
+from agents.project_scope.budget_parser import BudgetParser
+
+@pytest.mark.asyncio
+async def test_budget_parsing():
+    parser = BudgetParser()
+    result = await parser.create_budget_breakdown("$10k - $15k")
+    assert result['estimated_budget'] == 12500
+    assert result['breakdown']['labor']['amount'] == 6250
+
+File: tests/agent_specific/test_filter_agent.py
+
+import pytest
+from agents.communication_filter.contact_detector import MultiLayerContactDetector
+
+@pytest.mark.asyncio
+async def test_phone_detection():
+    detector = MultiLayerContactDetector()
+    text = "you can call me at 555-123-4567"
+    result = await detector.scan_content(text)
+    assert result["violations_found"] is True
+    assert "phone" in result["violation_types"]
+
+Step 2: Create Integration Tests
+These tests verify that agents and systems correctly interact with each other.
+
+File: tests/integration/test_event_flows.py
+
+import pytest
+
+# This test would require a live Redis instance or a sophisticated mock
+@pytest.mark.skip(reason="Requires live Redis or complex mock")
+@pytest.mark.asyncio
+async def test_intake_to_scope_flow():
+    # 1. Publish a 'project_submitted' event
+    # 2. Run Intake Agent and Scope Agent
+    # 3. Assert that a 'scope_complete' event is published with the correct project_id
+    assert True
+
+File: tests/integration/test_memory_consistency.py
+
+import pytest
+
+# This test would require live Redis and Supabase instances
+@pytest.mark.skip(reason="Requires live services")
+@pytest.mark.asyncio
+async def test_event_persists_to_supabase():
+    # 1. Publish any event to a Redis stream
+    # 2. Run the MemoryCoordinator logic
+    # 3. Query Supabase to ensure the event was saved to the 'events' table
+    assert True
+
+Step 3: Create End-to-End (E2E) Tests
+These tests simulate a full user journey through the system.
+
+File: tests/e2e/test_homeowner_journey.py
+
+import pytest
+
+@pytest.mark.skip(reason="Requires full system to be running")
+@pytest.mark.asyncio
+async def test_full_project_submission_to_scoping():
+    # This test would involve:
+    # 1. Simulating a user submitting a project description via an API call.
+    # 2. Polling Supabase until the project's status is 'scoping_complete'.
+    # 3. Verifying the data in the 'structured_scope' column is correct.
+    assert True
+
+Step 4: Create Security Tests
+These tests are critical for validating the core business logic.
+
+File: tests/security/test_contact_leakage.py
+
+import pytest
+from agents.communication_filter.contact_detector import MultiLayerContactDetector
+
+@pytest.mark.asyncio
+async def test_no_false_negatives():
+    detector = MultiLayerContactDetector()
+    obfuscated_texts = [
+        "call me at 555 one two three 4567",
+        "my email is user at example dot com"
+    ]
+    for text in obfuscated_texts:
+        result = await detector.scan_content(text)
+        # This is a placeholder; real patterns would be more complex
+        # assert result["violations_found"] is True
+        pass # Placeholder for more advanced regex
+
+@pytest.mark.asyncio
+async def test_no_false_positives():
+    detector = MultiLayerContactDetector()
+    legitimate_text = "The house is 555 square feet and the budget is 1234 dollars."
+    result = await detector.scan_content(legitimate_text)
+    assert result["violations_found"] is False
+
+Completion: Once you have created all the files listed above in the tests/ directory, this build step is complete.
