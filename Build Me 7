@@ -1,0 +1,340 @@
+Build Me 7: Agent 6 - UI Generator & FrontendTo the Codex Agent: Your task is to build the UI Generator Agent and the entire agent-aware React frontend. This agent listens to the activity of the entire swarm and provides real-time updates to the user interface, which will be built using CopilotKit to be dynamically responsive to agent states.Execute the following steps precisely.Step 1: Create the UI Generator AgentThis Python agent listens to events from all other agents and broadcasts a unified state to the frontend.File: agents/ui_generator/ui_agent.py# agents/ui_generator/ui_agent.py
+import asyncio
+import json
+from core.base.base_agent import BaseAgent
+from core.events.consumer import EventConsumer
+from core.events.publisher import EventPublisher
+
+class UIGeneratorAgent(BaseAgent):
+    """
+    Listens to swarm activity and generates a unified state for the frontend.
+    """
+    def __init__(self, agent_id: str = "ui_generator_001"):
+        super().__init__(agent_id, "ui_generator")
+        self.event_consumer = EventConsumer(
+            consumer_group="ui_generators",
+            consumer_name=self.agent_id
+        )
+        self.event_publisher = EventPublisher()
+
+    async def start_processing(self, mcp):
+        """Main event processing loop."""
+        print(f"Agent {self.agent_id} starting...")
+        # Listen to all major completion and status update events
+        streams_to_listen = [
+            "homeowner:intake_complete",
+            "homeowner:scope_complete",
+            "security:violation",
+            "platform:contact_released",
+            "project:status_updated" # A generic status stream
+        ]
+        while self.is_running:
+            try:
+                events = await self.event_consumer.consume(streams=streams_to_listen, mcp=mcp)
+                if events:
+                    for stream, messages in events:
+                        for message_id, data in messages:
+                            # Forward a formatted event to a dedicated UI stream
+                            decoded_data = {k.decode('utf-8'): v.decode('utf-8') for k, v in data.items()}
+                            await self.broadcast_ui_update(decoded_data, mcp)
+                            await mcp.call_tool("redis", {
+                                "command": "xack",
+                                "stream": stream.decode('utf-8'),
+                                "group": "ui_generators",
+                                "id": message_id.decode('utf-8')
+                            })
+                await asyncio.sleep(1)
+            except Exception as e:
+                await self.handle_error(e, mcp)
+                await asyncio.sleep(5)
+
+    async def broadcast_ui_update(self, event_data: dict, mcp):
+        """Publishes a formatted state update to the UI broadcast stream."""
+        ui_event = {
+            "event_type": event_data.get("event_type"),
+            "payload": event_data.get("data", "{}")
+        }
+        await self.event_publisher.publish(
+            stream="ui:broadcast",
+            event_type="state_update",
+            data=ui_event,
+            mcp=mcp
+        )
+Step 2: Set Up the React Application ShellThese are the main configuration and entry point files for the React frontend.File: ui/package.json{
+  "name": "instabids-ui",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@copilotkit/react-core": "^0.1.0",
+    "@copilotkit/react-ui": "^0.1.0",
+    "@supabase/supabase-js": "^2.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "typescript": "^4.8.4",
+    "@types/jest": "^27.5.2",
+    "@types/node": "^16.11.64",
+    "@types/react": "^18.0.21",
+    "@types/react-dom": "^18.0.6"
+  },
+  "devDependencies": {
+     "react-scripts": "5.0.1"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}
+File: ui/tsconfig.json{
+  "compilerOptions": {
+    "target": "es5",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "module": "esnext",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "src"
+  ]
+}
+File: ui/public/index.html<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Instabids AI Swarm</title>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
+File: ui/src/App.tsximport React from 'react';
+import { CopilotKit } from "@copilotkit/react-core";
+import { CopilotPopup } from "@copilotkit/react-ui";
+import { HomeownerDashboard } from './pages/HomeownerDashboard';
+import "@copilotkit/react-ui/styles.css";
+
+function App() {
+  return (
+    <CopilotKit url="/api/copilotkit">
+      <HomeownerDashboard />
+      <CopilotPopup
+        instructions="Help the user with their home renovation project."
+      />
+    </CopilotKit>
+  );
+}
+
+export default App;
+
+File: ui/src/index.tsximport React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+const root = ReactDOM.createRoot(
+  document.getElementById('root') as HTMLElement
+);
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+Step 3: Create the React Hooks for Real-Time DataThese hooks manage real-time connections to Supabase and Redis for live UI updates.File: ui/src/hooks/useProjectState.tsimport { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+// This would be initialized with environment variables
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL!;
+const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+export function useProjectState(projectId: string | null) {
+  const [projectState, setProjectState] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!projectId) {
+        setLoading(false);
+        return;
+    };
+
+    setLoading(true);
+    // Fetch initial state
+    const fetchProject = async () => {
+      const { data } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', projectId)
+        .single();
+      setProjectState(data);
+      setLoading(false);
+    };
+    fetchProject();
+
+    // Listen for real-time changes
+    const channel = supabase
+      .channel(`project_${projectId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'projects', filter: `id=eq.${projectId}` },
+        (payload) => {
+          setProjectState(payload.new);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [projectId]);
+
+  return { projectState, loading };
+}
+File: ui/src/hooks/useAgentActivity.tsimport { useState, useEffect } from 'react';
+
+// This hook would connect to the 'ui:broadcast' Redis stream via a WebSocket
+// or Server-Sent Events (SSE) endpoint for live agent activity updates.
+// This is a mock implementation for the boilerplate.
+export function useAgentActivity(projectId: string | null) {
+  const [activities, setActivities] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    
+    // Mock receiving an event
+    const interval = setInterval(() => {
+      const mockEvent = {
+        agentType: 'project_scope',
+        status: 'processing',
+        currentTask: `Analyzing requirements for project ${projectId}`
+      };
+      setActivities(prev => [...prev.slice(-4), mockEvent]); // Keep last 5 activities
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [projectId]);
+
+  return { agentActivities: activities };
+}
+Step 4: Create the UI ComponentsThese are the visual building blocks of the dashboard.File: ui/src/components/AgentSwarmVisualizer.tsximport React from 'react';
+import { useAgentActivity } from '../hooks/useAgentActivity';
+
+export function AgentSwarmVisualizer({ projectId }: { projectId: string | null }) {
+  const { agentActivities } = useAgentActivity(projectId);
+
+  return (
+    <div>
+      <h3>AI Agent Swarm Activity</h3>
+      <ul>
+        {agentActivities.map((activity, index) => (
+          <li key={index}>
+            <strong>{activity.agentType}:</strong> {activity.status} - {activity.currentTask}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+File: ui/src/components/ProjectStatus.tsximport React from 'react';
+
+export function ProjectStatus({ projectState }: { projectState: any }) {
+  if (!projectState) return <p>Loading project status...</p>;
+
+  return (
+    <div>
+      <h2>Project Status: {projectState.status}</h2>
+      {projectState.structured_scope && <p>Scoping is complete!</p>}
+      {projectState.contact_released && <p>Contact information has been released!</p>}
+    </div>
+  );
+}
+File: ui/src/components/ProjectIntakeForm.tsximport React from 'react';
+
+// This is a placeholder for the initial project submission form.
+export function ProjectIntakeForm({ onSubmit }: { onSubmit: (data: any) => void }) {
+  const handleSubmit = () => {
+    const mockData = {
+      description: 'I want to remodel my kitchen with an island.',
+      budget: '25000'
+    };
+    onSubmit(mockData);
+  };
+
+  return (
+    <div>
+      <h3>Submit a New Project</h3>
+      <button onClick={handleSubmit}>Submit Mock Project</button>
+    </div>
+  );
+}
+Step 5: Create the Main PageThis component ties all the other components together into a cohesive dashboard.File: ui/src/pages/HomeownerDashboard.tsximport React from 'react';
+import { useProjectState } from '../hooks/useProjectState';
+import { AgentSwarmVisualizer } from '../components/AgentSwarmVisualizer';
+import { ProjectStatus } from '../components/ProjectStatus';
+import { ProjectIntakeForm } from '../components/ProjectIntakeForm';
+
+export function HomeownerDashboard() {
+  const [projectId, setProjectId] = React.useState<string | null>(null);
+  const { projectState, loading } = useProjectState(projectId);
+
+  const handleProjectSubmit = async (data: any) => {
+    // In a real app, this would call an API to create the project in Supabase
+    // and publish the initial 'homeowner:project_submitted' event.
+    const mockNewProjectId = `proj_${Date.now()}`;
+    console.log(`Submitting project ${mockNewProjectId}`);
+    setProjectId(mockNewProjectId);
+  };
+
+  if (!projectId) {
+    return <ProjectIntakeForm onSubmit={handleProjectSubmit} />;
+  }
+
+  return (
+    <div>
+      <h1>Project Dashboard: {projectId}</h1>
+      {loading ? (
+        <p>Loading project...</p>
+      ) : (
+        <>
+          <ProjectStatus projectState={projectState} />
+          <hr />
+          <AgentSwarmVisualizer projectId={projectId} />
+        </>
+      )}
+    </div>
+  );
+}
+Completion: Once you have created all the files listed above, this build step is complete. You have now built the UI agent and the entire React frontend boilerplate.
