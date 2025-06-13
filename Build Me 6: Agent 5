@@ -1,0 +1,165 @@
+Build Me 6: Agent 5 - Payment GateTo the Codex Agent: Your task is to build the Payment Gate Agent. This agent manages the entire payment flow, from initiating a payment request to processing the transaction and, most importantly, releasing contact information only after a successful payment.Execute the following steps precisely.Step 1: Create the Transaction ProcessorThis module handles the direct interaction with the payment provider (e.g., Stripe).File: agents/payment_gate/transaction_processor.py# agents/payment_gate/transaction_processor.py
+
+class TransactionProcessor:
+    """
+    Handles payment processing through a provider like Stripe.
+    This is a mock implementation.
+    """
+    async def process_payment(self, amount: float, payment_token: str, metadata: dict, mcp) -> dict:
+        """
+        Processes a payment using a mock payment provider call.
+        In a real system, this would call the Stripe API.
+        """
+        print(f"Processing payment of ${amount} with token {payment_token}")
+        # Mocking a successful payment
+        if "card_declined" not in payment_token:
+            return {
+                "status": "succeeded",
+                "transaction_id": f"txn_mock_{metadata.get('project_id')}"
+            }
+        else:
+            return {"status": "failed", "error": "Card was declined."}
+
+    async def create_refund(self, transaction_id: str, amount: float, mcp) -> dict:
+        """Processes a refund."""
+        print(f"Refunding ${amount} for transaction {transaction_id}")
+        return {"status": "succeeded", "refund_id": f"ref_mock_{transaction_id}"}
+Step 2: Create the Secure Contact ReleaserThis is a critical security module that only releases contact information after payment confirmation.File: agents/payment_gate/contact_releaser.py# agents/payment_gate/contact_releaser.py
+import json
+
+class ContactReleaser:
+    """Manages the secure retrieval and release of contact information."""
+
+    async def release_contact_info(self, project_id: str, homeowner_id: str, contractor_id: str, mcp) -> bool:
+        """
+        Retrieves contact info from Supabase and publishes it to a secure, private stream
+        for the involved parties.
+        """
+        # 1. Get user profiles from Supabase
+        homeowner_profile_response = await mcp.call_tool("supabase", {
+            "action": "select", "table": "users", "match": {"id": homeowner_id}, "limit": 1
+        })
+        homeowner_profile = homeowner_profile_response[0] if homeowner_profile_response else None
+        
+        contractor_profile_response = await mcp.call_tool("supabase", {
+            "action": "select", "table": "users", "match": {"id": contractor_id}, "limit": 1
+        })
+        contractor_profile = contractor_profile_response[0] if contractor_profile_response else None
+
+        if not homeowner_profile or not contractor_profile:
+            print("ERROR: Could not retrieve user profiles for contact release.")
+            return False
+
+        # 2. In a real system, this data would be decrypted. Here we simulate it.
+        contact_data = {
+            "homeowner_contact": {"email": homeowner_profile.get("email")},
+            "contractor_contact": {"email": contractor_profile.get("email")}
+        }
+
+        # 3. Publish to a secure, private stream only accessible by these two users
+        release_event = {
+            "project_id": project_id,
+            "homeowner_id": homeowner_id,
+            "contractor_id": contractor_id,
+            "data": json.dumps(contact_data)
+        }
+        await mcp.call_tool("redis", {
+            "command": "xadd",
+            "stream": f"private:contact_release:{project_id}",
+            "fields": release_event
+        })
+        return True
+Step 3: Create the Main Payment AgentThis agent orchestrates the entire payment and contact release workflow.File: agents/payment_gate/payment_agent.py# agents/payment_gate/payment_agent.py
+import asyncio
+import json
+from core.base.base_agent import BaseAgent
+from core.events.consumer import EventConsumer
+from core.events.publisher import EventPublisher
+from agents.payment_gate.transaction_processor import TransactionProcessor
+from agents.payment_gate.contact_releaser import ContactReleaser
+
+class PaymentGateAgent(BaseAgent):
+    """Controls contact release through payment verification."""
+    def __init__(self, agent_id: str = "payment_gate_001"):
+        super().__init__(agent_id, "payment_gate")
+        self.transaction_processor = TransactionProcessor()
+        self.contact_releaser = ContactReleaser()
+        self.event_consumer = EventConsumer(
+            consumer_group="payment_processors",
+            consumer_name=self.agent_id
+        )
+        self.event_publisher = EventPublisher()
+
+    async def start_processing(self, mcp):
+        """Main event processing loop."""
+        print(f"Agent {self.agent_id} starting...")
+        streams_to_listen = [
+            "homeowner:contractor_selected",
+            "contractor:payment_submitted"
+        ]
+        while self.is_running:
+            try:
+                events = await self.event_consumer.consume(streams=streams_to_listen, mcp=mcp)
+                if events:
+                    for stream, messages in events:
+                        for message_id, data in messages:
+                            decoded_data = {k.decode('utf-8'): v.decode('utf-8') for k, v in data.items()}
+                            payload = json.loads(decoded_data.get('data', '{}'))
+                            event_type = decoded_data.get('event_type')
+                            
+                            if event_type == "contractor_selected":
+                                await self.initiate_payment_flow(payload, mcp)
+                            elif event_type == "payment_submitted":
+                                await self.process_payment(payload, mcp)
+
+                            await mcp.call_tool("redis", {
+                                "command": "xack",
+                                "stream": stream.decode('utf-8'),
+                                "group": "payment_processors",
+                                "id": message_id.decode('utf-8')
+                            })
+                await asyncio.sleep(1)
+            except Exception as e:
+                await self.handle_error(e, mcp)
+                await asyncio.sleep(5)
+
+    async def initiate_payment_flow(self, event_data: dict, mcp):
+        """Starts the payment process when a contractor is selected."""
+        project_id = event_data.get("project_id")
+        # In a real system, the fee would be calculated based on project scope
+        connection_fee = 75.00
+        await self.event_publisher.publish("contractor:payment_required", "payment_required", {
+            "project_id": project_id,
+            "contractor_id": event_data.get("contractor_id"),
+            "amount": connection_fee
+        }, mcp)
+
+    async def process_payment(self, event_data: dict, mcp):
+        """Processes the payment and triggers contact release on success."""
+        project_id = event_data.get("project_id")
+        homeowner_id = event_data.get("homeowner_id")
+        contractor_id = event_data.get("contractor_id")
+
+        payment_result = await self.transaction_processor.process_payment(
+            amount=event_data.get("amount"),
+            payment_token=event_data.get("payment_token"),
+            metadata={"project_id": project_id},
+            mcp=mcp
+        )
+
+        if payment_result.get("status") == "succeeded":
+            # CRITICAL STEP: Only release contact info after payment confirmation
+            release_ok = await self.contact_releaser.release_contact_info(
+                project_id, homeowner_id, contractor_id, mcp
+            )
+            if release_ok:
+                await self.event_publisher.publish("platform:contact_released", "contact_released", {
+                    "project_id": project_id
+                }, mcp)
+        else:
+            await self.event_publisher.publish("contractor:payment_failed", "payment_failed", {
+                "project_id": project_id,
+                "contractor_id": contractor_id,
+                "error": payment_result.get("error")
+            }, mcp)
+Completion: Once you have created all the files listed above in the agents/payment_gate/ directory, this build step is complete.
