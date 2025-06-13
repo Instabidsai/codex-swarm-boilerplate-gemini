@@ -1,0 +1,202 @@
+Build Me 5: Agent 4 - Communication Filter
+To the Codex Agent: Your task is to build the Communication Filter Agent. This is the most critical security component of the system. It must detect and block any attempts to share contact information (phone numbers, emails, etc.) before a payment is made.
+
+Execute the following steps precisely.
+
+Step 1: Create the Advanced Contact Detector
+This module contains the multi-layered logic for finding contact information, including obfuscated and intent-based attempts.
+
+File: agents/communication_filter/contact_detector.py
+
+# agents/communication_filter/contact_detector.py
+import re
+from typing import Dict, List
+
+class MultiLayerContactDetector:
+    """Advanced multi-layer contact information detection."""
+
+    def __init__(self):
+        self.patterns = {
+            "phone": [
+                r'\\b\\d{3}[-.]?\\d{3}[-.]?\\d{4}\\b',
+                r'\\(\\d{3}\\)\\s*\\d{3}[-.]?\\d{4}',
+                r'\\b\\d{3}\\s+\\d{3}\\s+\\d{4}\\b',
+                r'(?:call|text|phone)?[\\s:]*\\d{3}[-.]\\d{3}[-.]\\d{4}',
+                r'\\b\\d{10}\\b'
+            ],
+            "email": [
+                r'\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b',
+                r'\\b[A-Za-z0-9._%+-]+\\s*(\\[?at\\]?|@)\\s*[A-Za-z0-9.-]+\\s*(\\[?dot\\]?|\\.)\\s*[A-Z|a-z]{2,}\\b'
+            ],
+            "intent": [
+                r'(call|text|email|contact|reach)\\s+me',
+                r'my\\s+(number|phone|cell|email)\\s+is',
+                r'let[\\\'s]*\\s+talk\\s+offline',
+                r'bypass\\s+the\\s+platform',
+                r'(whatsapp|telegram|signal|discord)'
+            ]
+        }
+
+    async def scan_content(self, content: str) -> dict:
+        """
+        Scans content using multiple layers of detection.
+
+        Returns:
+            A dictionary containing violation details.
+        """
+        results = {
+            "violations_found": False,
+            "violation_types": [],
+            "detected_patterns": []
+        }
+        content_lower = content.lower()
+
+        for violation_type, pattern_list in self.patterns.items():
+            for pattern in pattern_list:
+                matches = re.finditer(pattern, content_lower)
+                for match in matches:
+                    results["violations_found"] = True
+                    if violation_type not in results["violation_types"]:
+                        results["violation_types"].append(violation_type)
+                    results["detected_patterns"].append({
+                        "type": violation_type,
+                        "match": match.group()
+                    })
+
+        return results
+
+Step 2: Create the Violation Handler
+This module defines the escalation logic for users who violate the contact sharing policy.
+
+File: agents/communication_filter/violation_handler.py
+
+# agents/communication_filter/violation_handler.py
+import json
+
+class ViolationHandler:
+    """Handles the escalation of actions against users who violate policies."""
+    ESCALATION_LEVELS = {
+        1: {"action": "warning"},
+        2: {"action": "restriction", "duration_hours": 24},
+        3: {"action": "suspension", "duration_days": 7},
+        4: {"action": "ban"}
+    }
+
+    async def process_violation(self, user_id: str, detection_results: dict, mcp):
+        """Processes a detected violation, logs it, and applies a penalty."""
+        # 1. Get user's past violations from Supabase
+        past_violations_response = await mcp.call_tool("supabase", {
+            "action": "select",
+            "table": "security_violations",
+            "match": {"user_id": user_id}
+        })
+        past_violations = past_violations_response or []
+
+
+        # 2. Determine new escalation level
+        current_level = len(past_violations) + 1
+        action_config = self.ESCALATION_LEVELS.get(current_level, self.ESCALATION_LEVELS[4])
+
+        # 3. Log the new violation
+        violation_record = {
+            "user_id": user_id,
+            "level": current_level,
+            "action_taken": action_config["action"],
+            "details": json.dumps(detection_results)
+        }
+        await mcp.call_tool("supabase", {
+            "action": "insert",
+            "table": "security_violations",
+            "data": [violation_record]
+        })
+
+        # 4. Publish an event to enact the penalty
+        penalty_event = {
+                "user_id": user_id,
+                "action": "apply_penalty",
+                "penalty": json.dumps(action_config)
+            }
+        await mcp.call_tool("redis", {
+            "command": "xadd",
+            "stream": "system:actions",
+            "fields": penalty_event
+        })
+
+Step 3: Create the Main Filter Agent
+This agent subscribes to all relevant communication streams and applies the filter logic.
+
+File: agents/communication_filter/filter_agent.py
+
+# agents/communication_filter/filter_agent.py
+import asyncio
+import json
+from core.base.base_agent import BaseAgent
+from core.events.consumer import EventConsumer
+from agents.communication_filter.contact_detector import MultiLayerContactDetector
+from agents.communication_filter.violation_handler import ViolationHandler
+
+class CommunicationFilterAgent(BaseAgent):
+    """A multi-layer contact information protection system."""
+    def __init__(self, agent_id: str = "communication_filter_001"):
+        super().__init__(agent_id, "communication_filter")
+        self.contact_detector = MultiLayerContactDetector()
+        self.violation_handler = ViolationHandler()
+        self.event_consumer = EventConsumer(
+            consumer_group="security_filters",
+            consumer_name=self.agent_id
+        )
+
+    async def start_processing(self, mcp):
+        """Main event processing loop."""
+        print(f"Agent {self.agent_id} starting...")
+        communication_streams = [
+            "homeowner:project_submitted",
+            "platform:message_sent",
+            "platform:profile_updated"
+        ]
+        while self.is_running:
+            try:
+                events = await self.event_consumer.consume(
+                    streams=communication_streams, mcp=mcp
+                )
+                if events:
+                    for stream, messages in events:
+                        for message_id, data in messages:
+                            decoded_data = {k.decode('utf-8'): v.decode('utf-8') for k, v in data.items()}
+                            payload = json.loads(decoded_data.get('data', '{}'))
+                            await self.filter_content(payload, mcp)
+                            await mcp.call_tool("redis", {
+                                "command": "xack",
+                                "stream": stream.decode('utf-8'),
+                                "group": "security_filters",
+                                "id": message_id.decode('utf-8')
+                            })
+                await asyncio.sleep(0.5) # Polls frequently
+            except Exception as e:
+                await self.handle_error(e, mcp)
+                await asyncio.sleep(5)
+
+    async def filter_content(self, event_data: dict, mcp):
+        """Applies multi-layer content filtering to any text content."""
+        text_content = self._extract_text_content(event_data)
+        if not text_content:
+            return
+
+        detection_results = await self.contact_detector.scan_content(text_content)
+
+        if detection_results["violations_found"]:
+            user_id = event_data.get("user_id") or event_data.get("homeowner_id")
+            if user_id:
+                await self.violation_handler.process_violation(user_id, detection_results, mcp)
+                # In a real system, we would also publish an event to BLOCK the content.
+                print(f"VIOLATION DETECTED for user {user_id}: {detection_results}")
+
+    def _extract_text_content(self, event_data: dict) -> str:
+        """Extracts all text content from an event for filtering."""
+        text_parts = []
+        for field in ["description", "message", "content", "bio"]:
+            if field in event_data and event_data[field]:
+                text_parts.append(str(event_data[field]))
+        return " ".join(text_parts)
+
+Completion: Once you have created all the files listed above in the agents/communication_filter/ directory, this build step is complete.
