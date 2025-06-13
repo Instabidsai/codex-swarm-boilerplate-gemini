@@ -1,0 +1,302 @@
+Build Me 2: Core Infrastructure Code
+To the Codex Agent: Your task is to populate the core/ directory with all the foundational Python code for the project. This includes the MCP wrapper, base agent classes, and modules for events, memory, and security.
+
+Execute the following steps precisely.
+
+Step 1: Create the MCP Tool Wrapper
+This class is the universal interface for all tool interactions.
+
+File: core/mcp/tools.py
+
+# core/mcp/tools.py
+
+class MCPClient:
+    """
+    A wrapper for making calls to the Master Control Program (MCP) tools.
+    The actual implementation of this class will be provided by the
+    Codex agent environment. This serves as a placeholder for development.
+    """
+    async def call_tool(self, tool_name: str, args: dict):
+        """
+        Wrapper for MCP tool calls.
+
+        Args:
+            tool_name (str): The name of the tool to call (e.g., 'redis', 'supabase').
+            args (dict): The arguments for the tool call.
+
+        Returns:
+            The result of the tool call.
+        """
+        # This is where the actual call to the underlying MCP mechanism would go.
+        # For local testing, this can be mocked to return expected results.
+        print(f"MCP Call: {tool_name} with {args}")
+        pass
+
+# Global MCP client instance to be used by all agents.
+mcp = MCPClient()
+
+Step 2: Create the Base Agent Components
+These are the fundamental building blocks for all agents.
+
+File: core/base/base_agent.py
+
+# core/base/base_agent.py
+import asyncio
+import uuid
+# from core.events.publisher import EventPublisher # To be used later
+
+class BaseAgent:
+    """
+    The base class for all agents in the swarm.
+    Provides common functionality like ID, status, and error handling.
+    """
+    def __init__(self, agent_id: str, agent_type: str):
+        self.agent_id = agent_id or f"{agent_type}_{uuid.uuid4()}"
+        self.agent_type = agent_type
+        self.is_running = False
+
+    async def start(self):
+        """Starts the agent's main processing loop."""
+        self.is_running = True
+        await self.start_processing()
+
+    async def stop(self):
+        """Stops the agent's main processing loop."""
+        self.is_running = False
+
+    async def start_processing(self):
+        """
+        The main processing loop for the agent.
+        This must be overridden by subclasses.
+        """
+        raise NotImplementedError("Subclasses must implement the start_processing method.")
+
+    async def handle_error(self, error: Exception, mcp):
+        """
+        Handles any errors that occur during processing.
+        Logs the error and publishes an error event.
+        """
+        print(f"Error in {self.agent_id}: {error}")
+        # This would publish to a high-priority system alert stream.
+
+File: core/base/event_mixin.py
+
+# core/base/event_mixin.py
+from typing import List
+
+class EventMixin:
+    """
+    A mixin class to provide event handling capabilities to agents.
+    Assumes the existence of an event consumer and publisher.
+    """
+
+    async def consume_events(self, streams: List[str], mcp, count: int = 10):
+        """Consumes events from the specified Redis streams."""
+        if not hasattr(self, 'event_consumer'):
+            raise AttributeError("EventMixin requires an 'event_consumer' attribute.")
+        return await self.event_consumer.consume(streams, mcp, count)
+
+    async def publish_event(self, stream: str, event_type: str, data: dict, mcp):
+        """Publishes an event to the specified Redis stream."""
+        if not hasattr(self, 'event_publisher'):
+            raise AttributeError("EventMixin requires an 'event_publisher' attribute.")
+        return await self.event_publisher.publish(stream, event_type, data, mcp)
+
+Step 3: Create the Event System Components
+These modules manage the Redis-based event-driven communication.
+
+File: core/events/publisher.py
+
+# core/events/publisher.py
+import json
+import uuid
+from datetime import datetime
+
+class EventPublisher:
+    """Redis Streams event publisher using the MCP tool wrapper."""
+
+    async def publish(self, stream: str, event_type: str, data: dict, mcp):
+        """Publishes an event to a Redis Stream."""
+        event = {
+            'event_id': str(uuid.uuid4()),
+            'event_type': event_type,
+            'timestamp': datetime.utcnow().isoformat(),
+            'data': json.dumps(data)
+        }
+        return await mcp.call_tool("redis", {
+            "command": "xadd",
+            "stream": stream,
+            "fields": event
+        })
+
+File: core/events/consumer.py
+
+# core/events/consumer.py
+from typing import List
+
+class EventConsumer:
+    """Redis Streams consumer with consumer group support using MCP."""
+
+    def __init__(self, consumer_group: str, consumer_name: str):
+        self.consumer_group = consumer_group
+        self.consumer_name = consumer_name
+
+    async def consume(self, streams: List[str], mcp, count: int = 10):
+        """Consumes events from a list of streams for the configured consumer group."""
+        stream_dict = {stream: '>' for stream in streams}
+        return await mcp.call_tool("redis", {
+            "command": "xreadgroup",
+            "group": self.consumer_group,
+            "consumer": self.consumer_name,
+            "streams": stream_dict,
+            "count": count
+        })
+
+File: core/events/schemas.py
+
+# core/events/schemas.py
+from pydantic import BaseModel, UUID4
+from datetime import datetime
+from typing import Dict, Any
+
+class BaseEvent(BaseModel):
+    """A base model for all events for validation purposes."""
+    event_id: UUID4
+    event_type: str
+    timestamp: datetime
+    data: Dict[str, Any]
+
+File: core/events/coordinator.py
+
+# core/events/coordinator.py
+
+class EventCoordinator:
+    """Manages the setup of Redis streams and consumer groups."""
+    def __init__(self, streams_and_groups: dict):
+        self.streams_and_groups = streams_and_groups
+
+    async def setup_streams(self, mcp):
+        """Creates all necessary streams and consumer groups using MCP."""
+        print("Setting up Redis streams and consumer groups...")
+        for stream, groups in self.streams_and_groups.items():
+            for group in groups:
+                try:
+                    await mcp.call_tool("redis", {
+                        "command": "xgroup_create",
+                        "stream": stream,
+                        "group": group,
+                        "id": "$",
+                        "mkstream": True
+                    })
+                    print(f"Created group '{group}' on stream '{stream}'.")
+                except Exception as e:
+                    if "BUSYGROUP" in str(e):
+                        print(f"Group '{group}' on stream '{stream}' already exists.")
+                    else:
+                        print(f"Error creating group '{group}' on stream '{stream}': {e}")
+        print("Stream setup complete.")
+
+Step 4: Create the Memory System Components
+These modules manage the 3-tier memory system (Redis & Supabase).
+
+File: core/memory/event_store.py
+
+# core/memory/event_store.py
+import json
+
+class EventStore:
+    """Handles the storage of all events to Supabase for a permanent audit trail."""
+    def __init__(self, table_name: str = "events"):
+        self.table_name = table_name
+
+    async def store_event(self, event: dict, mcp):
+        """Stores a single event in the Supabase event store table."""
+        if isinstance(event.get('data'), dict):
+            event['data'] = json.dumps(event['data'])
+
+        await mcp.call_tool("supabase", {
+            "action": "insert",
+            "table": self.table_name,
+            "data": [event]
+        })
+
+File: core/memory/memory_coordinator.py
+
+# core/memory/memory_coordinator.py
+
+class MemoryCoordinator:
+    """Coordinates memory operations across different tiers (Redis, Supabase)."""
+    def __init__(self, event_store):
+        self.event_store = event_store
+
+    async def persist_event_from_stream(self, stream_event, mcp):
+        """Takes an event from a Redis stream and persists it to the event store."""
+        message_id, event_data = stream_event
+        await self.event_store.store_event(event_data, mcp)
+        print(f"Persisted event {event_data.get('event_id')} to Supabase.")
+
+Step 5: Create the Security System Components
+These modules provide the foundational security features.
+
+File: core/security/contact_filter.py
+
+# core/security/contact_filter.py
+import re
+from typing import Dict, List
+
+class ContactProtectionFilter:
+    """
+    A simplified version of the contact protection filter.
+    The full, multi-layer implementation is in the communication_filter agent.
+    This core version provides a basic pattern check.
+    """
+    PHONE_PATTERNS = [r'\\b\\d{3}[-.]?\\d{3}[-.]?\\d{4}\\b']
+    EMAIL_PATTERNS = [r'\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b']
+
+    def scan_content(self, content: str) -> Dict[str, List[str]]:
+        """Scans content for basic phone and email patterns."""
+        violations = {"phones": [], "emails": []}
+        for pattern in self.PHONE_PATTERNS:
+            violations["phones"].extend(re.findall(pattern, content))
+        for pattern in self.EMAIL_PATTERNS:
+            violations["emails"].extend(re.findall(pattern, content))
+        return violations
+
+File: core/security/cost_breaker.py
+
+# core/security/cost_breaker.py
+class CostCircuitBreaker:
+    """A circuit breaker to prevent runaway AI costs."""
+    def __init__(self, daily_limit: float = 1000.0, per_event_limit: float = 0.05):
+        self.daily_limit = daily_limit
+        self.per_event_limit = per_event_limit
+        self.daily_cost = 0.0 # This would be fetched from a central store
+
+    async def check_cost_approval(self, estimated_cost: float, mcp) -> bool:
+        """Checks if a proposed action's cost is within limits."""
+        if estimated_cost > self.per_event_limit:
+            print(f"COST VIOLATION: Per-event limit exceeded. Cost: ${estimated_cost}")
+            return False
+        if self.daily_cost + estimated_cost > self.daily_limit:
+            print("EMERGENCY SHUTDOWN: Daily cost limit exceeded.")
+            return False
+        return True
+
+File: core/security/audit_logger.py
+
+# core/security/audit_logger.py
+class AuditLogger:
+    """Logs critical security and compliance events to a dedicated audit trail."""
+    def __init__(self, table_name: str = "audit_logs"):
+        self.table_name = table_name
+
+    async def log(self, actor: str, action: str, details: dict, mcp):
+        """Creates an audit log entry."""
+        log_entry = { "actor": actor, "action": action, "details": details }
+        await mcp.call_tool("supabase", {
+            "action": "insert",
+            "table": self.table_name,
+            "data": [log_entry]
+        })
+
+Completion: Once you have created all the files listed above in the core/ directory, this build step is complete.

@@ -1,0 +1,43 @@
+{
+  "project": "instabids-homeowner-swarm",
+  "version": "1.0.0",
+  "architecture": "event-driven-agent-swarm",
+  "entryPoints": {
+    "agent1_infrastructure": "core/events/publisher.py",
+    "agent2_intake": "agents/homeowner_intake/intake_agent.py",
+    "agent3_scope": "agents/project_scope/scope_agent.py",
+    "agent4_filter": "agents/communication_filter/filter_agent.py",
+    "agent5_payment": "agents/payment_gate/payment_agent.py",
+    "agent6_ui": "agents/ui_generator/ui_agent.py"
+  },
+  "testCommand": "python -m pytest tests/",
+  "buildCommand": "docker-compose up -d",
+  "mcpTools": {
+    "essential": ["filesystem", "redis", "supabase"],
+    "research": ["context7", "github"],
+    "deployment": ["digitalocean", "vercel", "docker"]
+  },
+  "dependencies": {
+    "core": ["redis", "supabase", "langchain"],
+    "ui": ["react", "copilotkit", "typescript"],
+    "testing": ["pytest", "jest", "asyncio"]
+  },
+  "architecture_patterns": {
+    "communication": "redis-streams-only",
+    "memory": "3-tier-redis-postgres-supabase",
+    "security": "multi-layer-contact-protection",
+    "cost_control": "circuit-breakers-enabled"
+  },
+  "criticalRules": [
+    "NO_DIRECT_AGENT_COMMUNICATION",
+    "CONTACT_PROTECTION_ABSOLUTE",
+    "COST_LIMITS_ENFORCED",
+    "EVENT_SOURCING_REQUIRED",
+    "MCP_TOOLS_ONLY"
+  ],
+  "agentCoordination": {
+    "buildOrder": ["agent1", ["agent2", "agent3", "agent4"], ["agent5", "agent6"]],
+    "statusTracking": "build_coordination/build_status.json",
+    "handoffProtocol": "event-completion-triggers-next-agent"
+  }
+}

@@ -1,0 +1,227 @@
+Build Me 3: Agent 2 - Homeowner Intake
+To the Codex Agent: Your task is to build the Homeowner Intake Agent. This agent processes natural language project descriptions, extracts key information, and flags any security violations before passing the structured data to the next agent in the swarm.
+
+Execute the following steps precisely.
+
+Step 1: Create the Intake Schemas
+This file defines the data structures for the intake process.
+
+File: agents/homeowner_intake/intake_schemas.py
+
+# agents/homeowner_intake/intake_schemas.py
+from pydantic import BaseModel, Field
+from typing import List, Optional
+
+class ExtractedProjectInfo(BaseModel):
+    """
+    Defines the structured data extracted from a user's project description.
+    """
+    project_type: str = Field(default="unknown", description="The type of project, e.g., bathroom_remodel.")
+    requirements: List[str] = Field(default_factory=list, description="Specific requirements mentioned by the user.")
+    budget_range: Optional[str] = Field(default=None, description="The user's stated budget.")
+    timeline: Optional[str] = Field(default=None, description="The user's stated timeline.")
+    urgency: str = Field(default="normal", description="The urgency of the project.")
+    unclear_requirements: List[str] = Field(default_factory=list, description="Items that need further clarification.")
+
+Step 2: Create the NLP Processor
+This module is responsible for the core logic of understanding the user's text.
+
+File: agents/homeowner_intake/nlp_processor.py
+
+# agents/homeowner_intake/nlp_processor.py
+from typing import List
+from agents.homeowner_intake.intake_schemas import ExtractedProjectInfo
+import json
+
+class NLPProcessor:
+    """
+    Uses an LLM to perform Natural Language Processing on project descriptions.
+    """
+    async def extract_project_info(self, description: str, mcp) -> dict:
+        """
+        Extracts structured information from a raw project description using an LLM call.
+
+        Args:
+            description (str): The user's raw text description.
+            mcp: The MCP client instance.
+
+        Returns:
+            A dictionary containing the extracted project information.
+        """
+        extraction_prompt = f"""
+        Extract the following information from this project description:
+
+        Description: "{description}"
+
+        Please extract:
+        1.  Project type (e.g., bathroom remodel, kitchen, flooring)
+        2.  Specific requirements (e.g., materials, styles, features)
+        3.  Budget range (if mentioned)
+        4.  Timeline preferences (if mentioned)
+        5.  Urgency level (urgent, normal, flexible)
+
+        Return as a JSON object with keys: "project_type", "requirements", "budget_range", "timeline", "urgency".
+        """
+
+        # This would be a call to an LLM tool like claude-code or a similar service
+        result_json_str = await mcp.call_tool("context7", {
+            "query": extraction_prompt
+        })
+
+        try:
+            # In a real scenario, you would parse the LLM's JSON string output.
+            # Add robust JSON parsing and error handling here.
+            extracted = json.loads(result_json_str) if result_json_str else {}
+        except (json.JSONDecodeError, TypeError):
+            # Fallback for simulation or if the LLM fails
+            extracted = {"project_type": "simulated_remodel", "requirements": ["simulated_tile"]}
+
+
+        extracted_data = ExtractedProjectInfo(**extracted)
+        extracted_data.unclear_requirements = self._identify_unclear_items(extracted_data)
+
+        return extracted_data.dict()
+
+    def _identify_unclear_items(self, extracted_data: ExtractedProjectInfo) -> List[str]:
+        """Identifies which key pieces of information are still missing."""
+        unclear = []
+        if not extracted_data.budget_range:
+            unclear.append("budget_range")
+        if not extracted_data.timeline:
+            unclear.append("timeline")
+        if extracted_data.project_type == "unknown":
+            unclear.append("project_type")
+        return unclear
+
+Step 3: Create the Conversation Handler
+This module manages follow-up conversations if the initial description is unclear.
+
+File: agents/homeowner_intake/conversation_handler.py
+
+# agents/homeowner_intake/conversation_handler.py
+import json
+
+class ConversationHandler:
+    """
+    Handles multi-turn conversations with users to clarify project details.
+    """
+    def __init__(self):
+        # In a real system, conversation memory would be stored in Redis.
+        self.conversation_memory = {}
+
+    async def needs_clarification(self, extracted_data: dict) -> bool:
+        """Checks if the project requires clarification."""
+        return bool(extracted_data.get("unclear_requirements"))
+
+    async def request_clarification(self, project_id: str, unclear_items: list, mcp):
+        """
+        Publishes an event to the UI agent to ask the user for more information.
+        """
+        event_data = {
+            "project_id": project_id,
+            "type": "clarification_request",
+            "message": f"To help you get the best bids, please provide more details on the following: {', '.join(unclear_items)}."
+        }
+        await mcp.call_tool("redis", {
+            "command": "xadd",
+            "stream": "ui:prompts",
+            "fields": { "data": json.dumps(event_data) }
+        })
+
+Step 4: Create the Main Intake Agent
+This is the primary file that orchestrates the intake process. It uses the other modules to perform its tasks.
+
+File: agents/homeowner_intake/intake_agent.py
+
+# agents/homeowner_intake/intake_agent.py
+import asyncio
+import json
+from core.base.base_agent import BaseAgent
+from core.events.publisher import EventPublisher
+from core.events.consumer import EventConsumer
+from core.security.contact_filter import ContactProtectionFilter
+from agents.homeowner_intake.nlp_processor import NLPProcessor
+from agents.homeowner_intake.conversation_handler import ConversationHandler
+
+class HomeownerIntakeAgent(BaseAgent):
+    """
+    Processes homeowner project submissions, extracts data, and handles conversations.
+    """
+    def __init__(self, agent_id: str = "homeowner_intake_001"):
+        super().__init__(agent_id, "homeowner_intake")
+        self.nlp_processor = NLPProcessor()
+        self.contact_filter = ContactProtectionFilter()
+        self.conversation_handler = ConversationHandler()
+        self.event_publisher = EventPublisher()
+        self.event_consumer = EventConsumer(
+            consumer_group="intake_processors",
+            consumer_name=self.agent_id
+        )
+
+    async def start_processing(self, mcp):
+        """Main event processing loop."""
+        print(f"Agent {self.agent_id} starting...")
+        while self.is_running:
+            try:
+                # The mcp tool call will return a list of streams with their messages
+                events = await self.event_consumer.consume(
+                    streams=["homeowner:project_submitted"], mcp=mcp
+                )
+                if events:
+                    for stream, messages in events:
+                        for message_id, data in messages:
+                            # The 'data' field from Redis is often bytes, needs decoding
+                            decoded_data = {k.decode('utf-8'): v.decode('utf-8') for k, v in data.items()}
+                            payload = json.loads(decoded_data.get('data', '{}'))
+                            await self.process_submission(payload, mcp)
+                            await mcp.call_tool("redis", {
+                                "command": "xack",
+                                "stream": stream.decode('utf-8'),
+                                "group": "intake_processors",
+                                "id": message_id.decode('utf-8')
+                            })
+                await asyncio.sleep(1)
+            except Exception as e:
+                await self.handle_error(e, mcp)
+                await asyncio.sleep(5)
+
+    async def process_submission(self, project_data: dict, mcp):
+        """Handles a single project submission."""
+        description = project_data.get("description", "")
+        project_id = project_data.get("project_id")
+
+        # 1. Security Screening
+        security_violations = self.contact_filter.scan_content(description)
+        if any(security_violations.values()):
+            # Publish a security violation event
+            await self.event_publisher.publish("security:violation", "contact_info_detected", {
+                "project_id": project_id,
+                "violations": security_violations
+            }, mcp)
+            return
+
+        # 2. Extract Information
+        extracted_data = await self.nlp_processor.extract_project_info(description, mcp)
+
+        # 3. Store extracted data (e.g., in a Supabase read model)
+        await mcp.call_tool("supabase", {
+            "action": "update",
+            "table": "projects",
+            "match": {"id": project_id},
+            "data": {"intake_data": json.dumps(extracted_data), "status": "intake_processing"}
+        })
+
+        # 4. Check if clarification is needed
+        if await self.conversation_handler.needs_clarification(extracted_data):
+            await self.conversation_handler.request_clarification(
+                project_id, extracted_data["unclear_requirements"], mcp
+            )
+        else:
+            # 5. Publish completion event for the next agent
+            await self.event_publisher.publish("homeowner:intake_complete", "intake_complete", {
+                "project_id": project_id,
+                "data": extracted_data
+            }, mcp)
+
+
+Completion: Once you have created all the files listed above in the agents/homeowner_intake/ directory, this build step is complete.
