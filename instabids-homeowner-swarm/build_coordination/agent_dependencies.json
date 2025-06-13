@@ -1,0 +1,8 @@
+{
+  "agent_1": [],
+  "agent_2": ["agent_1"],
+  "agent_3": ["agent_1", "agent_2"],
+  "agent_4": ["agent_1"],
+  "agent_5": ["agent_1", "agent_4"],
+  "agent_6": ["agent_1", "agent_2", "agent_3", "agent_4", "agent_5"]
+}
